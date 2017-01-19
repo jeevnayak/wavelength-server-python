@@ -1,20 +1,21 @@
-import os
-import sys
-
 from flask import Flask, jsonify, request
-from flask_sqlalchemy import SQLAlchemy
+from flask_graphql import GraphQLView
 from sqlalchemy.orm import joinedload
 
+from database import db_session
+from models import Game, Round, User
+from schema import schema
 from util import generate_games_resp, server_game_to_client
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SQLALCHEMY_ECHO"] = True
-app.config["SQLALCHEMY_RECORD_QUERIES"] = True
-db = SQLAlchemy(app)
+app.debug = True
 
-from models import Game, Round, User
+app.add_url_rule("/graphql", view_func=GraphQLView.as_view(
+    "graphql", schema=schema, graphiql=True))
+
+@app.teardown_appcontext
+def shutdown_session(exception=None):
+    db_session.remove()
 
 @app.route("/games/<user_id>", methods=["GET"])
 def games(user_id):
@@ -42,8 +43,8 @@ def update_user():
     else:
         user = User(user_id, name, first_name, last_name, fb_token)
 
-    db.session.add(user)
-    db.session.commit()
+    db_session.add(user)
+    db_session.commit()
 
     return "ok"
 
@@ -63,8 +64,8 @@ def create_game():
             request_user = player
     game.rounds.append(Round("WORD", player1_id))
 
-    db.session.add(game)
-    db.session.commit()
+    db_session.add(game)
+    db_session.commit()
 
     return jsonify(server_game_to_client(request_user, game))
 
@@ -82,7 +83,7 @@ def update_round():
     round.guesses = guesses
     round.replayed = replayed
 
-    db.session.add(round)
-    db.session.commit()
+    db_session.add(round)
+    db_session.commit()
 
     return "ok"
